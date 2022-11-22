@@ -5,7 +5,8 @@
 #include "RGB.h"
 #include "BleKeyboard.h"
 #include "ui.h"
-
+#include <SPI.h>
+#include "Wire.h"
 BleKeyboard bleKeyboard;
 //设置引脚
 /*
@@ -33,8 +34,11 @@ uint8_t dial_flag;
 #define MO1 17
 #define MO2 16
 #define MO3 15
+static const int spiClk = 1000000; // 400KHz
+SPIClass* hspi = NULL;
 #define MT6701_SDA 1
 #define MT6701_SCL 2
+#define MT6701_SS 42
 
 // 使用软SPI
 // Arduino_DataBus *bus = new Arduino_SWSPI(TFT_DC, TFT_CS, 18 /* SCK */, 23 /* MOSI */, -1 /* MISO */);
@@ -76,22 +80,25 @@ BLDCDriver3PWM driver = BLDCDriver3PWM(MO1, MO2, MO3);
 float target_velocity = 0;
 float row_angle;
 
+//目标变量
 float readMySensorCallback() {
-  uint8_t i2cData[2];  // Buffer for I2C data
-  i2cRead(0x03, i2cData, 1);
-  i2cRead(0x04, i2cData + 1, 1);
-  uint16_t ag = i2cData[0] << 8 | i2cData[1];
-  ag = ag >> 2;
-  float rad = (float)ag * 2 * PI / 16384;
-  if (rad < 0) {
-    rad += 2 * PI;
-  }
+    hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
+    digitalWrite(hspi->pinSS(), LOW); //pull SS slow to prep other end for transfer
+    uint16_t ag = hspi->transfer16(0);
+    digitalWrite(hspi->pinSS(), HIGH); //pull ss high to signify end of data transfer
+    hspi->endTransaction();
+    ag = ag >> 2;
+    float rad = (float)ag * 2 * PI / 16384;
+    if (rad < 0) {
+        rad += 2 * PI;
+    }
   return rad;
 }
-
 void initMySensorCallback() {
   // do the init
-  Wire.begin(MT6701_SDA, MT6701_SCL, uint32_t(400000));  // Set I2C frequency to 400kHz
+    hspi = new SPIClass(HSPI);
+    hspi->begin(MT6701_SCL, MT6701_SDA, -1, MT6701_SS); //SCLK, MISO, MOSI, SS
+    pinMode(hspi->pinSS(), OUTPUT); //HSPI SS
 }
 
 // create the sensor
