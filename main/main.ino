@@ -22,7 +22,7 @@ BleKeyboard bleKeyboard;
 #define OFF_PIN 7
 #define OFF_UP_PIN 6
 #define PUSH_BUTTON 5
-uint8_t push_flag, push_states;
+uint8_t push_flag, push_states,sleep_flag=0;
 uint32_t push_time, push_in_time, push_two_time;
 uint8_t dial_flag;
 #define SCLK 12
@@ -103,7 +103,16 @@ void initMySensorCallback() {
 
 // create the sensor
 GenericSensor sensor = GenericSensor(readMySensorCallback, initMySensorCallback);
-
+void display_init();
+void power_off() {
+  digitalWrite(OFF_PIN, HIGH);
+  delay(100);
+  digitalWrite(OFF_PIN, LOW);
+  delay(200);
+  digitalWrite(OFF_PIN, HIGH);
+  delay(100);
+  digitalWrite(OFF_PIN, LOW);
+}
 void setup() {
   // monitoring port
   Serial.begin(115200);
@@ -257,22 +266,22 @@ void loop() {
       case 1:  //单击
         rgb_flag = 1;
         pixelRoll = 0;
+        if(sleep_flag)
+        {
+          digitalWrite(TFT_BLK, HIGH);
+          motor.enable();
+        sleep_flag = 0;
+        }
+        
         if (bleKeyboard.isConnected())
           bleKeyboard.sendDialReport(DIAL_PRESS);
         break;
-      case 2:  //双击切换
-        switch (lv_page) {
-          case 0:  //首页
-            lv_event_send(ui_Button1, LV_EVENT_CLICKED, 0);
-            lv_page = 1;
-            break;
-          case 1:  //第二页
-            lv_event_send(ui_Button2, LV_EVENT_CLICKED, 0);
-            lv_page = 0;
-            break;
-          default:
-            break;
-        }
+      case 2:  //双击关机
+          power_off();
+          rgb_off();
+          digitalWrite(TFT_BLK, LOW);
+          sleep_flag = 1;
+          motor.disable();
         break;
       case 3:  //长按
         rgb_flag = 2;
@@ -333,14 +342,4 @@ void display_init() {
     lv_meter_set_indicator_value(meter, line_indic, dial_angle);
     Serial.println("Setup done");
   }
-}
-void power_off()
-{
-  digitalWrite(OFF_PIN,HIGH);
-  delay(50);
-  digitalWrite(OFF_PIN,LOW);
-  delay(150);
-  digitalWrite(OFF_PIN,HIGH);
-  delay(50);
-  digitalWrite(OFF_PIN,LOW);
 }
